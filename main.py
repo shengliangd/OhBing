@@ -1,7 +1,6 @@
 import math
 import re
 import threading
-import config
 import readline
 from datetime import datetime
 import pickle
@@ -250,6 +249,11 @@ What important information could be summarized from this conversation? List them
 
 
 def main():
+    # we have different configs for different bots
+    # but need to import as config, according to the config name sys.argv[1]
+    # a temporary solution
+    config = __import__(sys.argv[1].split('.')[0])
+
     openai.api_base = config.api_server
 
     language_model = LanguageModel(api_key=config.openai_key)
