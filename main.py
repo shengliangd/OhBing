@@ -1,3 +1,4 @@
+import threading
 import config
 import readline
 from datetime import datetime
@@ -89,15 +90,17 @@ class Memory:
         scores = []
         for ts, text, emb in self.memory:
             # recency: exponential decay
-            # TODO: recency
-            recency = 1
+            # decay to 0.5 in 24 hours
+            tau = - (60*60*2) / np.log(0.5)
+            recency = np.exp(- (time.time() - ts) / tau)
             # relevance: cosine similarity
             relevance = np.dot(embedding, emb) / \
                 np.linalg.norm(embedding) / np.linalg.norm(emb)
             # TODO: importance
             importance = 1
 
-            scores.append(recency * relevance * importance)
+            scores.append(0.20 * recency + 0.50 *
+                          relevance + 0.30 * importance)
             logger.debug(f'\t{scores[-1]:.3f} {text}')
         # sort scores with indices, filter by thresh
         scores = np.array(scores)
@@ -118,31 +121,45 @@ class Memory:
 
 class ChatBot:
     def __init__(self, memory: Memory, lm: LanguageModel, config):
+        self.chat_history: List[Tuple[str, str]] = []
         self.memory = memory
         self.lm = lm
         self.config = config
 
-    def think(self, inp: str, chat_history: List[Tuple[str, str]]) -> str:
-        # retrieve memory
-        logger.debug(f'retrieving memory about: {inp}')
-        mem = self.memory.retrieve(
-            time.time(), inp, self.config.max_retrieve_num, self.config.similarity_thresh)
-        logger.debug(f'retrieved memory: \n{mem}')
+        self.lock = threading.Lock()
 
-        related_memory_str = ' '.join([content for _, content in mem])
-        chat_history_str = ''
-        for role, text in chat_history:
-            if role == 'I':
-                role = self.config.name
-            chat_history_str += f'{role}: {text}\n'
+        def reflect_task():
+            while True:
+                time.sleep(config.chat_summary_interval)
+                self._reflect()
+        self.reflection_thread = threading.Thread(
+            target=reflect_task, daemon=True)
+        self.reflection_thread.start()
 
-        # construct prompt
-        prompt = f"""\
+    def think(self, inp: str) -> str:
+        with self.lock:
+            self.chat_history.append(('other', inp))
+
+            # retrieve memory
+            logger.debug(f'retrieving memory about: {inp}')
+            mem = self.memory.retrieve(
+                time.time(), inp, self.config.max_retrieve_num, self.config.similarity_thresh)
+            logger.debug(f'retrieved memory: \n{mem}')
+
+            related_memory_str = ' '.join([content for _, content in mem])
+            chat_history_str = ''
+            for role, text in self.chat_history:
+                if role == 'me':
+                    role = self.config.name
+                chat_history_str += f'{role}: {text}\n'
+
+            # construct prompt
+            prompt = f"""\
 It is {datetime.now().strftime('%m/%d/%Y %H:%M')}.
 {self.config.description}
 {self.config.name} is having a conversation with another person.
 
-Summary of relevant context from {self.config.name}'s memory:
+Summary of {self.config.name}'s relevant memory:
 {related_memory_str}
 
 Conversation history:
@@ -151,42 +168,53 @@ Conversation history:
 How would {self.config.name} respond?
 {self.config.name}: """
 
-        # ask LM
-        logger.debug(f'generating response with prompt: \n{prompt}')
-        ret = self.lm.generate(prompt).lstrip(f'{self.config.name}: ')
+            # ask LM
+            logger.debug(f'generating response with prompt: \n{prompt}')
+            ret = self.lm.generate(prompt).lstrip(f'{self.config.name}: ')
+            logger.debug(f'generated response: \n{ret}')
 
-        return ret
+            self.chat_history.append(('me', ret))
 
-    def reflect(self, chat_history: List[Tuple[str, str]]):
-        if len(chat_history) == 0:
-            return
+            return ret
 
-        chat_history_str = ''
-        for role, text in chat_history:
-            if role == 'I':
-                role = self.config.name
-            chat_history_str += f'{role}: {text}\n'
+    def _reflect(self):
+        with self.lock:
+            if len(self.chat_history) == 0:
+                return
 
-        # construct prompt to identify notable info from the chat history
-        prompt = f"""\
+            chat_history_str = ''
+            for role, text in self.chat_history:
+                if role == 'me':
+                    role = self.config.name
+                chat_history_str += f'{role}: {text}\n'
+
+            # construct prompt to identify notable info from the chat history
+            prompt = f"""\
 Below is a conversation between {self.config.name} and another person:
 {chat_history_str}
 
-What important information could be summarized from the conversation? List them in concise lines:
+What important facts could be summarized from this conversation? List them in concise lines:
 """
 
-        # ask LM
-        logger.debug(f'reflecting with prompt: \n{prompt}')
-        ret = self.lm.generate(prompt)
+            # ask LM
+            logger.debug(f'reflecting with prompt: \n{prompt}')
+            ret = self.lm.generate(prompt)
 
-        # remove leading '*', spaces, numbering, etc.
-        ret = [line.strip().lstrip('*').lstrip('0123456789.- ')
-               for line in ret.split('\n') if line.strip()]
+            # remove leading '*', spaces, numbering, etc.
+            ret = [line.strip().lstrip('*').lstrip('0123456789.- ')
+                   for line in ret.split('\n') if line.strip()]
 
-        # add these info into memory
-        logger.debug(f'adding to memory: \n{ret}')
-        for line in ret:
-            self.memory.add(time.time(), line)
+            # add these info into memory
+            logger.debug(f'adding to memory: \n{ret}')
+            for line in ret:
+                self.memory.add(time.time(), line)
+
+            self.chat_history.clear()
+
+    def _read_news(self):
+        """Read random news from news sources."""
+        with self.lock:
+            pass
 
 
 def main():
@@ -201,26 +229,11 @@ def main():
     import atexit
     atexit.register(memory.save, config.memory_path)
 
-    chat_history = []
-
-    # reflect every chat_end_thresh times, backgroudly
-    import threading
-
-    def reflect():
-        while True:
-            time.sleep(config.chat_end_thresh)
-            bot.reflect(chat_history)
-            chat_history.clear()
-    threading.Thread(target=reflect, daemon=True).start()
-
     while True:
         inp = input('>> ').strip()
         if inp == '':
             continue
-        chat_history.append(('other', inp))
-
-        output = bot.think(inp, chat_history)
-        chat_history.append(('I', output))
+        output = bot.think(inp)
 
         print(f'{config.name}: {output}')
 
