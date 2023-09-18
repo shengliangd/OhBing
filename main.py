@@ -224,7 +224,7 @@ How would {self.config.name} respond?
 Below is a conversation between {self.config.name} and another person:
 {chat_history_str}
 
-What important information could be summarized from this conversation? List them in concise lines:
+What important information could be summarized from this conversation? List them:
 """
 
             # ask LM
@@ -252,6 +252,7 @@ def main():
     # we have different configs for different bots
     # but need to import as config, according to the config name sys.argv[1]
     # a temporary solution
+    global config
     config = __import__(sys.argv[1].split('.')[0])
 
     openai.api_base = config.api_server
