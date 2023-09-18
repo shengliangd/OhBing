@@ -1,3 +1,5 @@
+import math
+import re
 import threading
 import config
 import readline
@@ -18,6 +20,10 @@ handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+
+def cos_sim(a, b):
+    return np.dot(a, b) / np.linalg.norm(a) / np.linalg.norm(b)
 
 
 class LanguageModelOpenAI:
@@ -64,7 +70,8 @@ LanguageModel = LanguageModelOpenAI
 
 
 class Memory:
-    def __init__(self, path: str, lm: LanguageModel):
+    def __init__(self, path: str, lm: LanguageModel, config):
+        self.config = config
         self.lm = lm
         # try to load memory from path
         try:
@@ -73,50 +80,67 @@ class Memory:
         except FileNotFoundError:
             self.memory = []
         logger.debug(f'loaded memory:')
-        for ts, content, _ in self.memory:
-            logger.debug(f'\t{ts} {content}')
+        for ts, content, _, rating in self.memory:
+            logger.debug(f'\t{ts} {rating} {content}')
+        self.lock = threading.Lock()
 
     def add(self, ts: float, content: str):
-        embedding = self.lm.encode(content)
-        # TODO: importance
-        self.memory.append((ts, content, embedding))
+        with self.lock:
+            embedding = self.lm.encode(content)
+
+            # importance
+            prompt = f"""\
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
+Memory: {content}
+Rating (no explanation): """
+            logger.debug(f'asking for rating with prompt: \n{prompt}')
+            ret = self.lm.generate(prompt)
+            logger.debug(f'got rating: {ret}')
+            # match rating string from the generated text
+            pat = r'(\d+\.?\d*)'
+            try:
+                rating = float(re.findall(pat, ret)[0])
+            except IndexError:
+                rating = 1.0
+            rating /= 10.0
+
+            # remove very similar memories
+            self.new_memory = []
+            for item in self.memory:
+                if cos_sim(item[2], embedding) < self.config.similarity_thresh:
+                    self.new_memory.append(item)
+            self.new_memory.append((ts, content, embedding, rating))
+            self.memory = self.new_memory
 
     def retrieve(self, ts: float, content: str, max_num: int, thresh: float):
-        embedding = self.lm.encode(content)
+        with self.lock:
+            embedding = self.lm.encode(content)
 
-        logger.debug(f'retrieving for {content}')
+            logger.debug(f'retrieving for {content}')
 
-        # retrieve according to mixed metrics: recency, relevance, and importance
-        scores = []
-        for ts, text, emb in self.memory:
-            # recency: exponential decay
-            # decay to 0.5 in 24 hours
-            tau = - (60*60*2) / np.log(0.5)
-            recency = np.exp(- (time.time() - ts) / tau)
-            # relevance: cosine similarity
-            relevance = np.dot(embedding, emb) / \
-                np.linalg.norm(embedding) / np.linalg.norm(emb)
-            # TODO: importance
-            importance = 1
+            # retrieve according to mixed metrics: recency, relevance, and importance
+            scores = []
+            for ts, text, emb, importance in self.memory:
+                # recency: exponential decay
+                # decay to 0.5 in 24 hours
+                tau = - (60*60*24) / np.log(0.5)
+                recency = np.exp(- (time.time() - ts) / tau)
+                # relevance: cosine similarity
+                relevance = cos_sim(embedding, emb)
+                relevance = relevance if relevance > config.relevance_thresh else -math.inf
 
-            scores.append(0.20 * recency + 0.50 *
-                          relevance + 0.30 * importance)
-            logger.debug(f'\t{scores[-1]:.3f} {text}')
-        # sort scores with indices, filter by thresh
-        scores = np.array(scores)
-        indices = np.argsort(scores)[::-1]
-        indices = indices[scores[indices] > thresh]
-        return [self.memory[i][:2] for i in indices[:max_num]]
+                scores.append(0.20 * recency + 0.50 *
+                              relevance + 0.30 * importance)
+                logger.debug(f'\t{scores[-1]:.3f} {text}')
+            # sort scores with indices, filter by thresh
+            scores = np.array(scores)
+            indices = np.argsort(scores)[::-1]
+            indices = indices[scores[indices] > -math.inf]
+            return [self.memory[i][:2] for i in indices[:max_num]]
 
     def save(self, path: str):
         with open(path, 'wb') as f:
             pickle.dump(self.memory, f)
-
-    def _reflect(self):
-        pass
-
-    def _cleanup(self):
-        pass
 
 
 class ChatBot:
@@ -143,7 +167,7 @@ class ChatBot:
             # retrieve memory
             logger.debug(f'retrieving memory about: {inp}')
             mem = self.memory.retrieve(
-                time.time(), inp, self.config.max_retrieve_num, self.config.similarity_thresh)
+                time.time(), inp, self.config.max_retrieve_num, self.config.relevance_thresh)
             logger.debug(f'retrieved memory: \n{mem}')
 
             related_memory_str = ' '.join([content for _, content in mem])
@@ -221,7 +245,7 @@ def main():
     openai.api_base = config.api_server
 
     language_model = LanguageModel(api_key=config.openai_key)
-    memory = Memory(config.memory_path, language_model)
+    memory = Memory(config.memory_path, language_model, config)
 
     bot = ChatBot(memory, language_model, config)
 
