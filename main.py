@@ -40,6 +40,9 @@ class LanguageModelOpenAI:
                 logger.warning(
                     'rate limit exceeded during generation, will try again in 30s')
                 time.sleep(30)
+            except openai.error.APIError:
+                logger.warning('API error, will try again in 30s')
+                time.sleep(30)
         return completion.choices[0].message.content
 
     def encode(self, inp: str):
@@ -51,6 +54,9 @@ class LanguageModelOpenAI:
             except openai.error.RateLimitError:
                 logger.warning(
                     'rate limit exceeded during encoding, will try again in 30s')
+                time.sleep(30)
+            except openai.error.APIError:
+                logger.warning('API error, will try again in 30s')
                 time.sleep(30)
         return embedding
 
@@ -90,7 +96,8 @@ class Memory:
 
             # importance
             prompt = f"""\
-On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
+{self.config.description}
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance, facts, data), rate the importance of the following piece of memory for {self.config.name}.
 Memory: {content}
 Rating (no explanation): """
             logger.debug(f'asking for rating with prompt: \n{prompt}')
@@ -151,17 +158,12 @@ class ChatBot:
         self.config = config
 
         self.lock = threading.Lock()
-
-        def reflect_task():
-            while True:
-                time.sleep(config.chat_summary_interval)
-                self._reflect()
-        self.reflection_thread = threading.Thread(
-            target=reflect_task, daemon=True)
-        self.reflection_thread.start()
+        self._reflect_timer = None
 
     def think(self, inp: str) -> str:
         with self.lock:
+            self._reflect_timer and self._reflect_timer.cancel()
+
             self.chat_history.append(('other', inp))
 
             # retrieve memory
@@ -170,7 +172,9 @@ class ChatBot:
                 time.time(), inp, self.config.max_retrieve_num, self.config.relevance_thresh)
             logger.debug(f'retrieved memory: \n{mem}')
 
-            related_memory_str = ' '.join([content for _, content in mem])
+            related_memory_str = ''
+            for ts, content in mem:
+                related_memory_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
             chat_history_str = ''
             for role, text in self.chat_history:
                 if role == 'me':
@@ -179,7 +183,7 @@ class ChatBot:
 
             # construct prompt
             prompt = f"""\
-It is {datetime.now().strftime('%m/%d/%Y %H:%M')}.
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
 {self.config.description}
 {self.config.name} is having a conversation with another person.
 
@@ -199,6 +203,10 @@ How would {self.config.name} respond?
 
             self.chat_history.append(('me', ret))
 
+            # create an alarm that will fire in chat_summary_interval seconds
+            self._reflect_timer = threading.Timer(self.config.chat_summary_interval, self._reflect)
+            self._reflect_timer.start()
+
             return ret
 
     def _reflect(self):
@@ -217,7 +225,7 @@ How would {self.config.name} respond?
 Below is a conversation between {self.config.name} and another person:
 {chat_history_str}
 
-What important facts could be summarized from this conversation? List them in concise lines:
+What important information could be summarized from this conversation? List them in concise lines:
 """
 
             # ask LM
