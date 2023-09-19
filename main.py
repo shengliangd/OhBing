@@ -15,14 +15,17 @@ import numpy as np
 import openai
 from typing import Tuple, List
 
+cfg_name = sys.argv[1]
+host = sys.argv[2]
+
 import yaml
 config = yaml.load(
     open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
-os.makedirs(f'data/bots/{sys.argv[1]}', exist_ok=True)
+os.makedirs(f'data/bots/{cfg_name}', exist_ok=True)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(f'data/bots/{config["name"]}/log.log')
+handler = logging.FileHandler(f'data/bots/{cfg_name}/log.log')
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
@@ -182,7 +185,7 @@ class ChatBot:
             # retrieve memory
             logger.debug(f'retrieving memory about: {chat_history_str}')
             mem = self.memory.retrieve(
-                time.time(), chat_history_str, self.config['max_retrieve_num'], self.config['relevance_thresh'])
+                time.time(), inp, self.config['max_retrieve_num'], self.config['relevance_thresh'])
             logger.debug(f'retrieved memory: \n{mem}')
 
             related_memory_str = ''
@@ -263,11 +266,11 @@ openai.api_key = os.environ["OPENAI_API_KEY"]
 
 language_model = LanguageModel()
 memory = Memory(
-    f'data/bots/{config["name"]}/memory.pkl', language_model, config)
+    f'data/bots/{cfg_name}/memory.pkl', language_model, config)
 bot = ChatBot(memory, language_model, config)
 
 # save memory on exit
-atexit.register(memory.save, f'data/bots/{config["name"]}/memory.pkl')
+atexit.register(memory.save, f'data/bots/{cfg_name}/memory.pkl')
 
 app = Flask(__name__)
 app.static_folder = 'static'
@@ -293,4 +296,4 @@ def render_memory():
     return render_template("memory.html", memory=mem)
 
 
-app.run()
+app.run(host=host)
