@@ -1,3 +1,7 @@
+from flask import Flask, render_template, request
+import atexit
+import logging
+import os
 import math
 import re
 import threading
@@ -12,9 +16,10 @@ import openai
 from typing import Tuple, List
 
 import yaml
-config = yaml.load(open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
+config = yaml.load(
+    open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
+os.makedirs(f'data/bots/{sys.argv[1]}', exist_ok=True)
 
-import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler(f'data/bots/{config["name"]}/log.log')
@@ -206,7 +211,8 @@ How would {self.config['name']} respond?
             self.chat_history.append(('me', ret))
 
             # create an alarm that will fire in chat_summary_interval seconds
-            self._reflect_timer = threading.Timer(self.config['chat_summary_interval'], self._reflect)
+            self._reflect_timer = threading.Timer(
+                self.config['chat_summary_interval'], self._reflect)
             self._reflect_timer.start()
 
             return ret
@@ -250,25 +256,26 @@ What important information could be summarized from this conversation? List them
         with self.lock:
             pass
 
-import os
+
 openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com")
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 language_model = LanguageModel()
-memory = Memory(f'data/bots/{config["name"]}/memory.pkl', language_model, config)
+memory = Memory(
+    f'data/bots/{config["name"]}/memory.pkl', language_model, config)
 bot = ChatBot(memory, language_model, config)
 
 # save memory on exit
-import atexit
 atexit.register(memory.save, f'data/bots/{config["name"]}/memory.pkl')
 
-from flask import Flask, render_template, request
 app = Flask(__name__)
 app.static_folder = 'static'
+
 
 @app.route("/")
 def home():
     return render_template("index.html")
+
 
 @app.route("/get")
 def get_bot_response():
@@ -276,5 +283,13 @@ def get_bot_response():
     output = bot.think(userText)
 
     return output
+
+
+@app.route("/memory")
+def render_memory():
+    mem = [(datetime.fromtimestamp(m[0]).strftime("%Y/%m/%d %H:%M"),
+            m[1], m[2], m[3]) for m in memory.memory]
+    return render_template("memory.html", memory=mem)
+
 
 app.run()

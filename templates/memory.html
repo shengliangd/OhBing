@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<table id="data" class="table table-striped">
+    <thead>
+        <tr>
+            <th>time</th>
+            <th>importance</th>
+            <th>content</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for mem in memory %}
+        <tr>
+            <td>{{ mem[0] }}</td>
+            <td>{{ mem[3] }}</td>
+            <td>{{ mem[1]}}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
