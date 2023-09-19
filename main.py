@@ -99,8 +99,8 @@ class Memory:
             # importance
             prompt = f"""\
 {self.config['description']}
-On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance, facts, data), rate the importance of the following piece of memory for {self.config['name']}.
-Memory: {content}
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely important (e.g., college acceptance, break up, national policy), rate the importance of the following piece of memory:
+{content}
 Rating (no explanation): """
             logger.debug(f'asking for rating with prompt: \n{prompt}')
             ret = self.lm.generate(prompt)
