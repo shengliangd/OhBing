@@ -11,10 +11,13 @@ import numpy as np
 import openai
 from typing import Tuple, List
 
+import yaml
+config = yaml.load(open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stderr)
+handler = logging.FileHandler(f'data/bots/{config["name"]}/log.log')
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
@@ -27,7 +30,7 @@ def cos_sim(a, b):
 
 class LanguageModelOpenAI:
     def __init__(self, **kwargs):
-        openai.api_key = kwargs['api_key']
+        pass
 
     def generate(self, prompt):
         while True:
@@ -95,8 +98,8 @@ class Memory:
 
             # importance
             prompt = f"""\
-{self.config.description}
-On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance, facts, data), rate the importance of the following piece of memory for {self.config.name}.
+{self.config['description']}
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance, facts, data), rate the importance of the following piece of memory for {self.config['name']}.
 Memory: {content}
 Rating (no explanation): """
             logger.debug(f'asking for rating with prompt: \n{prompt}')
@@ -113,7 +116,7 @@ Rating (no explanation): """
             # remove very similar memories
             self.new_memory = []
             for item in self.memory:
-                if cos_sim(item[2], embedding) < self.config.similarity_thresh:
+                if cos_sim(item[2], embedding) < self.config['similarity_thresh']:
                     self.new_memory.append(item)
             self.new_memory.append((ts, content, embedding, rating))
             self.memory = self.new_memory
@@ -133,7 +136,7 @@ Rating (no explanation): """
                 recency = np.exp(- (time.time() - ts) / tau)
                 # relevance: cosine similarity
                 relevance = cos_sim(embedding, emb)
-                relevance = relevance if relevance > config.relevance_thresh else -math.inf
+                relevance = relevance if relevance > config['relevance_thresh'] else -math.inf
 
                 scores.append(0.20 * recency + 0.50 *
                               relevance + 0.30 * importance)
@@ -168,7 +171,7 @@ class ChatBot:
             # retrieve memory
             logger.debug(f'retrieving memory about: {inp}')
             mem = self.memory.retrieve(
-                time.time(), inp, self.config.max_retrieve_num, self.config.relevance_thresh)
+                time.time(), inp, self.config['max_retrieve_num'], self.config['relevance_thresh'])
             logger.debug(f'retrieved memory: \n{mem}')
 
             related_memory_str = ''
@@ -177,33 +180,33 @@ class ChatBot:
             chat_history_str = ''
             for role, text in self.chat_history:
                 if role == 'me':
-                    role = self.config.name
+                    role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
 
             # construct prompt
             prompt = f"""\
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
-{self.config.description}
-{self.config.name} is having a conversation with another person.
+{self.config['description']}
+{self.config['name']} is having a conversation with another person.
 
-Summary of {self.config.name}'s relevant memory:
+Summary of {self.config['name']}'s relevant memory:
 {related_memory_str}
 
 Conversation history:
 {chat_history_str}
 
-How would {self.config.name} respond?
-{self.config.name}: """
+How would {self.config['name']} respond?
+{self.config['name']}: """
 
             # ask LM
             logger.debug(f'generating response with prompt: \n{prompt}')
-            ret = self.lm.generate(prompt).lstrip(f'{self.config.name}: ')
+            ret = self.lm.generate(prompt).lstrip(f'{self.config["name"]}: ')
             logger.debug(f'generated response: \n{ret}')
 
             self.chat_history.append(('me', ret))
 
             # create an alarm that will fire in chat_summary_interval seconds
-            self._reflect_timer = threading.Timer(self.config.chat_summary_interval, self._reflect)
+            self._reflect_timer = threading.Timer(self.config['chat_summary_interval'], self._reflect)
             self._reflect_timer.start()
 
             return ret
@@ -216,12 +219,12 @@ How would {self.config.name} respond?
             chat_history_str = ''
             for role, text in self.chat_history:
                 if role == 'me':
-                    role = self.config.name
+                    role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
 
             # construct prompt to identify notable info from the chat history
             prompt = f"""\
-Below is a conversation between {self.config.name} and another person:
+Below is a conversation between {self.config['name']} and another person:
 {chat_history_str}
 
 What important information could be summarized from this conversation? List them:
@@ -247,19 +250,17 @@ What important information could be summarized from this conversation? List them
         with self.lock:
             pass
 
+import os
+openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com")
+openai.api_key = os.environ["OPENAI_API_KEY"]
 
-global config
-config = __import__(sys.argv[1].split('.')[0])
-
-openai.api_base = config.api_server
-
-language_model = LanguageModel(api_key=config.openai_key)
-memory = Memory(config.memory_path, language_model, config)
+language_model = LanguageModel()
+memory = Memory(f'data/bots/{config["name"]}/memory.pkl', language_model, config)
 bot = ChatBot(memory, language_model, config)
 
 # save memory on exit
 import atexit
-atexit.register(memory.save, config.memory_path)
+atexit.register(memory.save, f'data/bots/{config["name"]}/memory.pkl')
 
 from flask import Flask, render_template, request
 app = Flask(__name__)
