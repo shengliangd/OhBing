@@ -248,32 +248,32 @@ What important information could be summarized from this conversation? List them
             pass
 
 
-def main():
-    # we have different configs for different bots
-    # but need to import as config, according to the config name sys.argv[1]
-    # a temporary solution
-    global config
-    config = __import__(sys.argv[1].split('.')[0])
+global config
+config = __import__(sys.argv[1].split('.')[0])
 
-    openai.api_base = config.api_server
+openai.api_base = config.api_server
 
-    language_model = LanguageModel(api_key=config.openai_key)
-    memory = Memory(config.memory_path, language_model, config)
+language_model = LanguageModel(api_key=config.openai_key)
+memory = Memory(config.memory_path, language_model, config)
+bot = ChatBot(memory, language_model, config)
 
-    bot = ChatBot(memory, language_model, config)
+# save memory on exit
+import atexit
+atexit.register(memory.save, config.memory_path)
 
-    # save memory on exit
-    import atexit
-    atexit.register(memory.save, config.memory_path)
+from flask import Flask, render_template, request
+app = Flask(__name__)
+app.static_folder = 'static'
 
-    while True:
-        inp = input('>> ').strip()
-        if inp == '':
-            continue
-        output = bot.think(inp)
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-        print(f'{config.name}: {output}')
+@app.route("/get")
+def get_bot_response():
+    userText = request.args.get('msg')
+    output = bot.think(userText)
 
+    return output
 
-if __name__ == '__main__':
-    main()
+app.run()
