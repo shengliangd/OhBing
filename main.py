@@ -173,20 +173,21 @@ class ChatBot:
 
             self.chat_history.append(('other', inp))
 
-            # retrieve memory
-            logger.debug(f'retrieving memory about: {inp}')
-            mem = self.memory.retrieve(
-                time.time(), inp, self.config['max_retrieve_num'], self.config['relevance_thresh'])
-            logger.debug(f'retrieved memory: \n{mem}')
-
-            related_memory_str = ''
-            for ts, content in mem:
-                related_memory_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
             chat_history_str = ''
             for role, text in self.chat_history:
                 if role == 'me':
                     role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
+
+            # retrieve memory
+            logger.debug(f'retrieving memory about: {chat_history_str}')
+            mem = self.memory.retrieve(
+                time.time(), chat_history_str, self.config['max_retrieve_num'], self.config['relevance_thresh'])
+            logger.debug(f'retrieved memory: \n{mem}')
+
+            related_memory_str = ''
+            for ts, content in mem:
+                related_memory_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
 
             # construct prompt
             prompt = f"""\
