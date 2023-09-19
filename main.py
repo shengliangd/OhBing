@@ -233,7 +233,7 @@ How would {self.config['name']} respond?
 Below is a conversation between {self.config['name']} and another person:
 {chat_history_str}
 
-What important information could be summarized from this conversation? List them:
+What important information could be summarized from this conversation? List in their own language:
 """
 
             # ask LM
