@@ -1,3 +1,5 @@
+import yaml
+from email import utils
 from flask import Flask, render_template, request
 import atexit
 import logging
@@ -18,7 +20,6 @@ from typing import Tuple, List
 cfg_name = sys.argv[1]
 host = sys.argv[2]
 
-import yaml
 config = yaml.load(
     open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
 os.makedirs(f'data/bots/{cfg_name}', exist_ok=True)
@@ -106,8 +107,7 @@ class Memory:
 
             # importance
             prompt = f"""\
-{self.config['description']}
-On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely important (e.g., college acceptance, break up, national policy), rate the importance of the following piece of memory:
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely important (e.g., national policy, breaking news), rate the importance of the following piece of memory:
 {content}
 Rating (no explanation): """
             logger.debug(f'asking for rating with prompt: \n{prompt}')
@@ -146,9 +146,10 @@ Rating (no explanation): """
                 relevance = cos_sim(embedding, emb)
                 relevance = relevance if relevance > config['relevance_thresh'] else -math.inf
 
-                scores.append(0.20 * recency + 0.50 *
-                              relevance + 0.30 * importance)
-                logger.debug(f'\t{scores[-1]:.3f} {text}')
+                scores.append(0.10 * recency + 0.70 *
+                              relevance + 0.20 * importance)
+                logger.debug(
+                    f'\t{scores[-1]:.3f}({recency:.3f} {relevance:.3f} {importance:.3f}) {text}')
             # sort scores with indices, filter by thresh
             scores = np.array(scores)
             indices = np.argsort(scores)[::-1]
@@ -174,7 +175,7 @@ class ChatBot:
         with self.lock:
             self._reflect_timer and self._reflect_timer.cancel()
 
-            self.chat_history.append(('other', inp))
+            self.chat_history.append(('user', inp))
 
             chat_history_str = ''
             for role, text in self.chat_history:
@@ -209,7 +210,8 @@ How would {self.config['name']} respond?
 
             # ask LM
             logger.debug(f'generating response with prompt: \n{prompt}')
-            ret = self.lm.generate(prompt).lstrip(f'{self.config["name"]}: ')
+            ret = utils.remove_prefix(self.lm.generate(
+                prompt), f'{self.config["name"]}: ')
             logger.debug(f'generated response: \n{ret}')
 
             self.chat_history.append(('me', ret))
@@ -234,19 +236,15 @@ How would {self.config['name']} respond?
 
             # construct prompt to identify notable info from the chat history
             prompt = f"""\
-Below is a conversation between {self.config['name']} and another person:
 {chat_history_str}
 
-What important information could be summarized from this conversation? List in their own language:
+What facts/events/data should {self.config['name']} memorize from this conversation? List using the conversation's language:
 """
 
             # ask LM
             logger.debug(f'reflecting with prompt: \n{prompt}')
             ret = self.lm.generate(prompt)
-
-            # remove leading '*', spaces, numbering, etc.
-            ret = [line.strip().lstrip('*').lstrip('0123456789.- ')
-                   for line in ret.split('\n') if line.strip()]
+            ret = [line for line in ret.split('\n') if line.strip()]
 
             # add these info into memory
             logger.debug(f'adding to memory: \n{ret}')
