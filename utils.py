@@ -1,5 +1,8 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+import random
 from bs4 import BeautifulSoup
+from urllib.parse import quote
 
 
 def remove_prefix(text, prefix):
@@ -8,25 +11,47 @@ def remove_prefix(text, prefix):
     return text
 
 
-def search(query: str):
-    base_url = "https://cn.bing.com/search?q="
-    search_url = base_url + query
+options = FirefoxOptions()
+options.add_argument("--headless")
+options.binary = "/usr/bin/firefox-esr"
+options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0")
+browser = webdriver.Firefox(options)
 
+
+def search(query: str, max_num=3):
+    search_url = f"https://www.bing.com/search?q={quote(query)}"
     try:
-        response = requests.get(search_url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        browser.get(search_url)
+        soup = BeautifulSoup(browser.page_source, "html.parser")
 
         results = []
         for result in soup.find_all("li", class_="b_algo"):
-            title = result.find("h2").get_text()
-            content = result.find("p").get_text()
-            link = result.find("a")["href"]
-            results.append((title, content, link))
+            try:
+                title = result.find("h2").get_text()
+                link = result.find("a")["href"]
+                content = result.find("p").get_text()
+                results.append((title, content, link))
+            except:
+                pass
 
-        return results
-
+        return results[:max_num]
     except Exception as e:
-        print(f"Error: {e}")
         return []
 
+
+def get_news_mhy():
+    return ()
+
+
+def random_news():
+    """Returns (time, title, content).
+    """
+    news_apis = [get_news_mhy]
+    news = random.choice(news_apis)
+    return news
+
+
+if __name__ == '__main__':
+    while True:
+        inp = input(": ")
+        print(search(inp))

@@ -1,5 +1,5 @@
 import yaml
-from email import utils
+import utils
 from flask import Flask, render_template, request
 import atexit
 import logging
@@ -143,13 +143,13 @@ Rating (no explanation): """
                 tau = - (60*60*24) / np.log(0.5)
                 recency = np.exp(- (time.time() - ts) / tau)
                 # relevance: cosine similarity
-                relevance = cos_sim(embedding, emb)
-                relevance = relevance if relevance > config['relevance_thresh'] else -math.inf
+                raw_relevance = cos_sim(embedding, emb)
+                relevance = raw_relevance if raw_relevance > config['relevance_thresh'] else -math.inf
 
-                scores.append(0.10 * recency + 0.70 *
-                              relevance + 0.20 * importance)
+                scores.append(0.10 * recency + 0.85 *
+                              relevance + 0.05 * importance)
                 logger.debug(
-                    f'\t{scores[-1]:.3f}({recency:.3f} {relevance:.3f} {importance:.3f}) {text}')
+                    f'\t{scores[-1]:.3f}({recency:.3f} {raw_relevance:.3f} {importance:.3f}) {text}')
             # sort scores with indices, filter by thresh
             scores = np.array(scores)
             indices = np.argsort(scores)[::-1]
@@ -189,21 +189,42 @@ class ChatBot:
                 time.time(), inp, self.config['max_retrieve_num'], self.config['relevance_thresh'])
             logger.debug(f'retrieved memory: \n{mem}')
 
-            related_memory_str = ''
+            related_memory_str = ""
             for ts, content in mem:
                 related_memory_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
 
-            # construct prompt
+            # search?
+            prompt = f"""\
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+Conversation:
+{chat_history_str}
+
+If {self.config['name']} need to search on Internet for more information, provide keywords in their languange, else put "null".
+keywords: """
+
+            logger.debug(f'getting search string with prompt: \n{prompt}')
+            ret = self.lm.generate(prompt)
+            logger.debug(f'search string: {ret}')
+
+            search_result = [] if "null" == ret.strip() else utils.search(ret, 3)
+            logger.debug(f'search result: {search_result}')
+            search_result_str = ""
+            for title, content, link in search_result:
+                search_result_str += f"---\n{title}\n{content}\n"
+
+            # response
             prompt = f"""\
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
 {self.config['description']}
-{self.config['name']} is having a conversation with another person.
-
-Summary of {self.config['name']}'s relevant memory:
-{related_memory_str}
 
 Conversation history:
 {chat_history_str}
+
+{self.config['name']}'s relevant memory:
+{related_memory_str}
+
+Related information abstract on the Internet:
+{search_result_str}
 
 How would {self.config['name']} respond?
 {self.config['name']}: """
@@ -212,7 +233,7 @@ How would {self.config['name']} respond?
             logger.debug(f'generating response with prompt: \n{prompt}')
             ret = utils.remove_prefix(self.lm.generate(
                 prompt), f'{self.config["name"]}: ')
-            logger.debug(f'generated response: \n{ret}')
+            logger.debug(f'response: {ret}')
 
             self.chat_history.append(('me', ret))
 
@@ -238,7 +259,7 @@ How would {self.config['name']} respond?
             prompt = f"""\
 {chat_history_str}
 
-What facts/events/data should {self.config['name']} memorize from this conversation? List using the conversation's language:
+What facts/events/data should {self.config['name']} memorize from this conversation? List in self-contained text:
 """
 
             # ask LM
