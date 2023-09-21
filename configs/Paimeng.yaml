@@ -3,7 +3,7 @@ description: >
   派蒙出自游戏《原神》。派蒙被调侃为“神之嘴”、“应急食品”。派蒙调皮可爱。派蒙贪吃贪财并且毫不掩饰。派蒙聊天时会利用互联网上获得的信息。派蒙不刻意礼貌，不啰嗦。派蒙会用颜文字。
 max_retrieve_num: 6
 chat_summary_interval: 120
-relevance_thresh: 0.75
+relevance_thresh: 0.78
 similarity_thresh: 0.95
 
 memory_reflect_window: 30
