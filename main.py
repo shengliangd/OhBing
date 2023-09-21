@@ -165,12 +165,11 @@ Rating (no explanation): """
             mem_window_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
 
         prompt = f"""\
-It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 
 {mem_window_str}
 
-Given only the information above, what are 3 most salient high-level questions we can answer about the subjects in the statements?
-Questions:
+List at most 3 salient high-level questions we can answer from the above statements:
 """
         logger.debug(f'reflecting memory with prompt: \n{prompt}')
         ret = self.lm.generate(prompt)
@@ -186,12 +185,11 @@ Questions:
             related_mems_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
 
         prompt = f"""\
-It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 
 {related_mems_str}
 
-What 3 high-level insights can you infer from the above statements? List them.
-Insights:
+List at most 3 high-level insights that you can infer from the above statements:
 """
         logger.debug(f'generating insights with prompt: \n{prompt}')
         ret = self.lm.generate(prompt)
@@ -241,8 +239,8 @@ class ChatBot:
 
             # search?
             prompt = f"""\
-It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
-Conversation:
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
+{self.config['name']} is having a conversation:
 {chat_history_str}
 
 If {self.config['name']} need to search on Internet for more information, provide keywords in their languange, else put "null".
@@ -260,7 +258,7 @@ keywords: """
 
             # response
             prompt = f"""\
-It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 {self.config['description']}
 
 Conversation history:
@@ -272,6 +270,7 @@ Conversation history:
 Related information abstract on the Internet:
 {search_result_str}
 
+{self.config['name']} can also leverage your prior knowledge.
 How would {self.config['name']} respond?
 {self.config['name']}: """
 
@@ -305,7 +304,7 @@ How would {self.config['name']} respond?
             prompt = f"""\
 {chat_history_str}
 
-What facts/events/data should {self.config['name']} memorize from this conversation? List in self-contained text:
+Summarize important information from the conversation above into STAND-ALONE pieces in the same language:
 """
 
             # ask LM
