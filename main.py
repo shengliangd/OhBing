@@ -304,7 +304,7 @@ How would {self.config['name']} respond?
             prompt = f"""\
 {chat_history_str}
 
-Summarize important information from the conversation above into STAND-ALONE pieces in the same language:
+Summarize important information from the conversation above into STAND-ALONE pieces in the user's language:
 """
 
             # ask LM
