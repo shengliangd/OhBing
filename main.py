@@ -1,3 +1,4 @@
+import copy
 import yaml
 import utils
 from flask import Flask, render_template, request
@@ -49,11 +50,11 @@ class LanguageModelOpenAI:
                 break
             except openai.error.RateLimitError:
                 logger.warning(
-                    'rate limit exceeded during generation, will try again in 30s')
-                time.sleep(30)
+                    'rate limit exceeded during generation, will try again in 10s')
+                time.sleep(10)
             except openai.error.APIError:
-                logger.warning('API error, will try again in 30s')
-                time.sleep(30)
+                logger.warning('API error, will try again in 10s')
+                time.sleep(10)
         return completion.choices[0].message.content
 
     def encode(self, inp: str):
@@ -64,11 +65,11 @@ class LanguageModelOpenAI:
                 break
             except openai.error.RateLimitError:
                 logger.warning(
-                    'rate limit exceeded during encoding, will try again in 30s')
-                time.sleep(30)
+                    'rate limit exceeded during encoding, will try again in 10s')
+                time.sleep(10)
             except openai.error.APIError:
-                logger.warning('API error, will try again in 30s')
-                time.sleep(30)
+                logger.warning('API error, will try again in 10s')
+                time.sleep(10)
         return embedding
 
 
@@ -102,59 +103,104 @@ class Memory:
         self.lock = threading.Lock()
 
     def add(self, ts: float, content: str):
-        with self.lock:
-            embedding = self.lm.encode(content)
+        embedding = self.lm.encode(content)
 
-            # importance
-            prompt = f"""\
+        # importance
+        prompt = f"""\
 On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely important (e.g., national policy, breaking news), rate the importance of the following piece of memory:
 {content}
 Rating (no explanation): """
-            logger.debug(f'asking for rating with prompt: \n{prompt}')
-            ret = self.lm.generate(prompt)
-            logger.debug(f'got rating: {ret}')
-            # match rating string from the generated text
-            pat = r'(\d+\.?\d*)'
-            try:
-                rating = float(re.findall(pat, ret)[0])
-            except IndexError:
-                rating = 1.0
-            rating /= 10.0
+        logger.debug(f'asking for rating with prompt: \n{prompt}')
+        ret = self.lm.generate(prompt)
+        logger.debug(f'got rating: {ret}')
+        # match rating string from the generated text
+        pat = r'(\d+\.?\d*)'
+        try:
+            rating = float(re.findall(pat, ret)[0])
+        except IndexError:
+            rating = 1.0
+        rating /= 10.0
 
-            # remove very similar memories
-            self.new_memory = []
-            for item in self.memory:
-                if cos_sim(item[2], embedding) < self.config['similarity_thresh']:
-                    self.new_memory.append(item)
-            self.new_memory.append((ts, content, embedding, rating))
-            self.memory = self.new_memory
+        # remove very similar memories
+        self.new_memory = []
+        for item in copy.copy(self.memory):
+            if cos_sim(item[2], embedding) < self.config['similarity_thresh']:
+                self.new_memory.append(item)
+        self.new_memory.append((ts, content, embedding, rating))
+        self.memory = self.new_memory
 
     def retrieve(self, ts: float, content: str, max_num: int, thresh: float):
+        embedding = self.lm.encode(content)
+
+        logger.debug(f'retrieving for {content}')
+
+        # retrieve according to mixed metrics: recency, relevance, and importance
+        scores = []
         with self.lock:
-            embedding = self.lm.encode(content)
+            memory = copy.copy(self.memory)
+        for ts, text, emb, importance in memory:
+            # recency: exponential decay
+            # decay to 0.5 in 24 hours
+            tau = - (60*60*24) / np.log(0.5)
+            recency = np.exp(- (time.time() - ts) / tau)
+            # relevance: cosine similarity
+            raw_relevance = cos_sim(embedding, emb)
+            relevance = raw_relevance if raw_relevance > config['relevance_thresh'] else -math.inf
 
-            logger.debug(f'retrieving for {content}')
+            scores.append(0.10 * recency + 0.85 *
+                            relevance + 0.05 * importance)
+            logger.debug(
+                f'\t{scores[-1]:.3f}({recency:.3f} {raw_relevance:.3f} {importance:.3f}) {text}')
+        # sort scores with indices, filter by thresh
+        scores = np.array(scores)
+        indices = np.argsort(scores)[::-1]
+        indices = indices[scores[indices] > -math.inf]
+        return [memory[i][:2] for i in indices[:max_num]]
 
-            # retrieve according to mixed metrics: recency, relevance, and importance
-            scores = []
-            for ts, text, emb, importance in self.memory:
-                # recency: exponential decay
-                # decay to 0.5 in 24 hours
-                tau = - (60*60*24) / np.log(0.5)
-                recency = np.exp(- (time.time() - ts) / tau)
-                # relevance: cosine similarity
-                raw_relevance = cos_sim(embedding, emb)
-                relevance = raw_relevance if raw_relevance > config['relevance_thresh'] else -math.inf
+    def reflect(self):
+        with self.lock:
+            memory = copy.copy(self.memory)
+        mem_window_str = ""
+        for ts, content, _, _ in memory[-self.config['memory_reflect_window']:]:
+            mem_window_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
 
-                scores.append(0.10 * recency + 0.85 *
-                              relevance + 0.05 * importance)
-                logger.debug(
-                    f'\t{scores[-1]:.3f}({recency:.3f} {raw_relevance:.3f} {importance:.3f}) {text}')
-            # sort scores with indices, filter by thresh
-            scores = np.array(scores)
-            indices = np.argsort(scores)[::-1]
-            indices = indices[scores[indices] > -math.inf]
-            return [self.memory[i][:2] for i in indices[:max_num]]
+        prompt = f"""\
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+
+{mem_window_str}
+
+Given only the information above, what are 3 most salient high-level questions we can answer about the subjects in the statements?
+Questions:
+"""
+        logger.debug(f'reflecting memory with prompt: \n{prompt}')
+        ret = self.lm.generate(prompt)
+        ret = [line for line in ret.split('\n') if line.strip()]
+        logger.debug(f'questions: {ret}')
+        related_mems = set()
+        for line in ret:
+            # retrieve related memories
+            mem = self.retrieve(time.time(), line, self.config['max_retrieve_num'], self.config['relevance_thresh'])
+            related_mems.update(mem)
+        related_mems_str = ""
+        for ts, content in related_mems:
+            related_mems_str += f'{datetime.fromtimestamp(ts).strftime("%Y/%m/%d %H:%M")}: {content}\n'
+
+        prompt = f"""\
+It is {datetime.now().strftime('%Y/%m/%d %H:%M')}.
+
+{related_mems_str}
+
+What 3 high-level insights can you infer from the above statements? List them.
+Insights:
+"""
+        logger.debug(f'generating insights with prompt: \n{prompt}')
+        ret = self.lm.generate(prompt)
+        ret = [line for line in ret.split('\n') if line.strip()]
+        logger.debug(f'insights: {ret}')
+        # add these info into memory
+        for line in ret:
+            self.add(time.time(), line)
+
 
     def save(self, path: str):
         with open(path, 'wb') as f:
@@ -239,12 +285,12 @@ How would {self.config['name']} respond?
 
             # create an alarm that will fire in chat_summary_interval seconds
             self._reflect_timer = threading.Timer(
-                self.config['chat_summary_interval'], self._reflect)
+                self.config['chat_summary_interval'], self.summarize)
             self._reflect_timer.start()
 
             return ret
 
-    def _reflect(self):
+    def summarize(self):
         with self.lock:
             if len(self.chat_history) == 0:
                 return
@@ -274,10 +320,9 @@ What facts/events/data should {self.config['name']} memorize from this conversat
 
             self.chat_history.clear()
 
-    def _read_news(self):
-        """Read random news from news sources."""
+    def reflect(self):
         with self.lock:
-            pass
+            self.memory.reflect()
 
 
 openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com")
@@ -306,6 +351,11 @@ def get_bot_response():
     output = bot.think(userText)
 
     return output
+
+@app.route("/reflect")
+def reflect():
+    bot.reflect()
+    return "OK"
 
 
 @app.route("/memory")

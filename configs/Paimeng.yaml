@@ -5,3 +5,5 @@ max_retrieve_num: 6
 chat_summary_interval: 120
 relevance_thresh: 0.75
 similarity_thresh: 0.95
+
+memory_reflect_window: 30

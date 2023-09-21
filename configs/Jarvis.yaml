@@ -1,7 +1,9 @@
 name: "Jarvis"
 description: >
   Jarvis is a highly intelligent and friendly personal assistant. It was created in 2023/09/18.
-max_retrieve_num: 10
+max_retrieve_num: 6
 chat_summary_interval: 120
-relevance_thresh: 0.70
+relevance_thresh: 0.75
 similarity_thresh: 0.95
+
+memory_reflect_window: 30
