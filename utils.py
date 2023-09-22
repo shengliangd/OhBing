@@ -1,3 +1,4 @@
+import time
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 import random
@@ -24,7 +25,8 @@ def search(query: str, max_num=3):
     search_url = f"https://www.bing.com/search?q={quote(query)}"
     try:
         browser.get(search_url)
-        soup = BeautifulSoup(browser.page_source, "html.parser")
+        time.sleep(1)
+        soup = BeautifulSoup(browser.page_source, "lxml")
 
         results = []
         for result in soup.find_all("li", class_="b_algo"):
@@ -37,27 +39,29 @@ def search(query: str, max_num=3):
                 pass
     except Exception as e:
         return []
-    if len(results) == 0:
-        return []
 
-    title, abstract, link = random.choice(results[:5])
-    browser.get(link)
-    soup = BeautifulSoup(browser.page_source, "html.parser")
-    texts = []
-    total_len = 0
-    for elem in soup.find_all(text=True):
-        if total_len > 800:
-            break
-        if elem.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]'] or isinstance(elem, Comment):
-            continue
-        elem = elem.strip()
-        if len(elem) < 10:
-            continue
-        texts.append(elem)
-        total_len += len(elem)
-    texts = abstract + '...\n' + ('\n'.join(texts))
+    # read the first 1 in detail
+    if len(results) >= 1:
+        browser.get(results[0][2])
+        time.sleep(1)
+        soup = BeautifulSoup(browser.page_source, "lxml")
+        texts = []
+        total_len = 0
+        for text in soup.find_all(text=True):
+            if total_len > 200:
+                break
+            if text.parent.name in ["script", "style", "head", "title", "meta", "[document]"]:
+                continue
+            if isinstance(text, Comment):
+                continue
+            text = text.strip()
+            if len(text) < 10:
+                continue
+            texts.append(text)
+            total_len += len(text)
+        results[0] = (results[0][0], "\n".join((results[0][1], *texts)), results[0][2])
 
-    return title, texts, link
+    return results[:max_num]
 
 
 def get_news_mhy():

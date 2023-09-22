@@ -169,7 +169,7 @@ It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 
 {mem_window_str}
 
-List at most 3 salient high-level questions we can answer from the above statements:
+List at most 3 salient high-level questions we can answer from the above statements in the same language:
 """
         logger.debug(f'reflecting memory with prompt: \n{prompt}')
         ret = self.lm.generate(prompt)
@@ -189,7 +189,7 @@ It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 
 {related_mems_str}
 
-List at most 3 high-level insights that you can infer from the above statements:
+List at most 3 high-level insights that you can infer from the above statements, in the same language:
 """
         logger.debug(f'generating insights with prompt: \n{prompt}')
         ret = self.lm.generate(prompt)
@@ -242,8 +242,9 @@ class ChatBot:
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 {self.config['name']} is having a conversation:
 {chat_history_str}
+{self.config['name']}:___
 
-If {self.config['name']} need to search on Internet for more information, provide keywords in their languange, else put "null".
+If searching on Internet helps respond, provide keywords, otherwise put "null".
 keywords: """
 
             logger.debug(f'getting search string with prompt: \n{prompt}')
@@ -259,18 +260,23 @@ keywords: """
             # response
             prompt = f"""\
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
-{self.config['description']}
-
+{self.config['description']}\n
+"""
+            prompt += f"""\
 Conversation history:
-{chat_history_str}
-
+{chat_history_str}\n
+"""
+            if len(related_memory_str) > 0:
+                prompt += f"""\
 {self.config['name']}'s relevant memory:
-{related_memory_str}
-
+{related_memory_str}\n
+"""
+            if len(search_result_str) > 0:
+                prompt += f"""\
 Related information abstract on the Internet:
-{search_result_str}
-
-{self.config['name']} can also leverage your prior knowledge.
+{search_result_str}\n
+"""     
+            prompt += f"""\
 How would {self.config['name']} respond (in markdown)?
 {self.config['name']}: """
 
