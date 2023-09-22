@@ -254,7 +254,7 @@ keywords: """
             logger.debug(f'search result: {search_result}')
             search_result_str = ""
             for title, content, link in search_result:
-                search_result_str += f"---\n{title}\n{content}\n"
+                search_result_str += f"---\n{title}\n{link}\n{content}\n"
 
             # response
             prompt = f"""\
@@ -271,7 +271,7 @@ Related information abstract on the Internet:
 {search_result_str}
 
 {self.config['name']} can also leverage your prior knowledge.
-How would {self.config['name']} respond?
+How would {self.config['name']} respond (in markdown)?
 {self.config['name']}: """
 
             # ask LM
