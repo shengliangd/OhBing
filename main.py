@@ -330,7 +330,7 @@ Summarize important information from the conversation above into STAND-ALONE pie
             self.memory.reflect()
 
 
-openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com")
+openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 language_model = LanguageModel()
