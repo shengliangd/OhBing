@@ -240,22 +240,30 @@ class ChatBot:
             # search?
             prompt = f"""\
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
-{self.config['name']} is having a conversation:
+{self.config['name']} is having a chat:
 {chat_history_str}
-{self.config['name']}:___
 
-If searching on Internet helps respond, provide keywords, otherwise put "null".
-keywords: """
+Q: What should we search on Internet to help {self.config['name']}? Answer with at most 5 keywords in user's language, or put "null" if not applicable.
+A: """
 
             logger.debug(f'getting search string with prompt: \n{prompt}')
-            ret = self.lm.generate(prompt)
+            ret = self.lm.generate(prompt).strip()
             logger.debug(f'search string: {ret}')
 
-            search_result = [] if "null" == ret.strip() else utils.search(ret, 3)
-            logger.debug(f'search result: {search_result}')
-            search_result_str = ""
-            for title, content, link in search_result:
-                search_result_str += f"---\n{title}\n{link}\n{content}\n"
+            if ret == "null":
+                search_prompt_str = ""
+            else:
+                try:
+                    results = utils.search(ret, 3)
+                    logger.debug(f'search results: {results}')
+                    if len(results) == 0:
+                        search_result_str = f"found no result on the Internet."
+                    else:
+                        search_result_str = '\n'.join(
+                            [f"---\n{title}\n{link}\n{content}" for title, content, link in results])
+                except Exception as e:
+                    search_result_str = f"[ERROR: {str(e)[:30]}...]\n"
+                search_prompt_str = f"Real-time result about {ret} from the Internet:\n{search_result_str}"
 
             # response
             prompt = f"""\
@@ -263,18 +271,17 @@ It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 {self.config['description']}\n
 """
             prompt += f"""\
-Conversation history:
+Chat history:
 {chat_history_str}\n
 """
             if len(related_memory_str) > 0:
                 prompt += f"""\
-{self.config['name']}'s relevant memory:
+{self.config['name']}'s memory:
 {related_memory_str}\n
 """
-            if len(search_result_str) > 0:
-                prompt += f"""\
-Related information abstract on the Internet:
-{search_result_str}\n
+
+            prompt += f"""\
+{search_prompt_str}\n
 """     
             prompt += f"""\
 How would {self.config['name']} respond (in markdown)?
@@ -310,7 +317,7 @@ How would {self.config['name']} respond (in markdown)?
             prompt = f"""\
 {chat_history_str}
 
-Summarize important information from the conversation above into STAND-ALONE pieces in the user's language:
+Summarize important information from the chat above into STAND-ALONE pieces in the user's language:
 """
 
             # ask LM

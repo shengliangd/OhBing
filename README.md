@@ -7,13 +7,13 @@ See a rough video demo [here](https://www.bilibili.com/video/BV1Zj411b7rE).
 ## How it works?
 
 It's based on OpenAI's text generation and embedding APIs.
-When the user does not send any message for a while, a conversation will be summarized into pieces, and stored with text embedding.
+When the user does not send any message for a while, the chat will be summarized into pieces, and stored with text embedding. The chat history is then cleared.
 
 When replying to the user, the bot first retrieves relevant memories using cosine similarity along with some other metrics, 
 and searches the Internet with appropriate keywords if necessary.
 The retrieved memories and search results are then added to the prompt for reply generation.
 
-You can also trigger a reflection (manually), which will try to generate insights from the memories, and add back to the memory to be used in future conversations.
+You can also trigger a reflection (manually), which will try to generate insights from the memories, and add back to the memory to be used in future chats.
 
 Summarization and reflection are inspired by [Generative Agents: Interactive Simulacra of Human Behavior](https://arxiv.org/abs/2304.03442).
 

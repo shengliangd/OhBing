@@ -19,6 +19,7 @@ options.add_argument("--headless")
 options.binary = "/usr/bin/firefox-esr"
 options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0")
 browser = webdriver.Firefox(options)
+browser.set_page_load_timeout(10)
 
 
 def search(query: str, max_num=3):
@@ -38,28 +39,32 @@ def search(query: str, max_num=3):
             except:
                 pass
     except Exception as e:
-        return []
+        raise RuntimeError("api error")
 
     # read the first 1 in detail
     if len(results) >= 1:
-        browser.get(results[0][2])
-        time.sleep(1)
-        soup = BeautifulSoup(browser.page_source, "lxml")
-        texts = []
-        total_len = 0
-        for text in soup.find_all(text=True):
-            if total_len > 200:
-                break
-            if text.parent.name in ["script", "style", "head", "title", "meta", "[document]"]:
-                continue
-            if isinstance(text, Comment):
-                continue
-            text = text.strip()
-            if len(text) < 10:
-                continue
-            texts.append(text)
-            total_len += len(text)
-        results[0] = (results[0][0], "\n".join((results[0][1], *texts)), results[0][2])
+        try:
+            browser.get(results[0][2])
+            time.sleep(1)
+            soup = BeautifulSoup(browser.page_source, "lxml")
+            texts = []
+            total_len = 0
+            for text in soup.find_all(string=True):
+                if total_len > 200:
+                    break
+                if text.parent.name in ["script", "style", "head", "title", "meta", "[document]"]:
+                    continue
+                if isinstance(text, Comment):
+                    continue
+                text = text.strip()
+                if len(text) < 10:
+                    continue
+                texts.append(text)
+                total_len += len(text)
+            results[0] = (results[0][0], "\n".join((results[0][1], *texts)), results[0][2])
+        # selenium timeout
+        except TimeoutError:
+            pass
 
     return results[:max_num]
 
