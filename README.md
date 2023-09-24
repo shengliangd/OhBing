@@ -1,8 +1,13 @@
 # OhBing
 
 A NewBing-like chat bot with long-term memory.
+Very preliminary, improvements are welcome.
 
-See a rough video demo [here](https://www.bilibili.com/video/BV1Zj411b7rE).
+Sample (chat history cleared before the third image):
+
+![](figs/sample1-1.png) ![](figs/sample1-2.png) ![](figs/sample2.png)
+
+Also a rough video in Chinese [here](https://www.bilibili.com/video/BV1Zj411b7rE).
 
 ## How it works?
 
@@ -19,6 +24,7 @@ Summarization and reflection are inspired by [Generative Agents: Interactive Sim
 
 Currently it is hard-coded to use gpt-3.5-turbo.
 It has costed merely 4 RMB for testing and playing till now.
+gpt-3.5-turbo makes mistakes frequently, but it's still fun to play with.
 Try gpt-4 if you have enough money : \)
 
 ## Usage
