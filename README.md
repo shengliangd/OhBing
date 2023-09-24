@@ -47,3 +47,6 @@ Tips:
 1. Access `http://127.0.0.1:5000/memory` to see the memory of the bot;
 2. Access `http://127.0.0.1:5000/reflect` to trigger a reflection (it's slow, wait patiently);
 3. Check `data/bots/<config_name>/log.log` for logs.
+
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
