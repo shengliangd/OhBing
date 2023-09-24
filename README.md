@@ -1,17 +1,18 @@
 # OhBing
 
-A NewBing-like chat bot with long-term memory.
+A NewBing-like chat bot with long-term memory. It can search the Internet during chat, and remembers things you told it before (not limited by the languange model's context window).
 Very preliminary, improvements are welcome.
 
 Sample (chat history cleared before the third image):
 
 <p float="left">
-  <img src="figs/sample1-1.png" width="33%" />
-  <img src="figs/sample1-2.png" width="33%" />
-  <img src="figs/sample2.png" width="33%" />
+  <img src="figs/sample1-1.png" width="30%" />
+  <img src="figs/sample1-2.png" width="30%" />
+  <img src="figs/sample2.png" width="30%" />
 </p>
 
-Also a rough video in Chinese [here](https://www.bilibili.com/video/BV1Zj411b7rE).
+Also a video demo in Chinese [here](https://www.bilibili.com/video/BV1Zj411b7rE).
+The UI was simply adapted from [this](https://buffml.com/web-based-chatbot-using-flask-api/).
 
 ## How it works?
 
