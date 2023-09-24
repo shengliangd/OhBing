@@ -268,7 +268,7 @@ A: """
             # response
             prompt = f"""\
 It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
-{self.config['description']}\n
+{self.config['description']} {self.config['name']} has long-term memory. {self.config['name']} also leverages search result from the Internet when available.\n
 """
             prompt += f"""\
 Chat history:

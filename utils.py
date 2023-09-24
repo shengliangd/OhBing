@@ -50,7 +50,7 @@ def search(query: str, max_num=3):
             texts = []
             total_len = 0
             for text in soup.find_all(string=True):
-                if total_len > 200:
+                if total_len > 600:
                     break
                 if text.parent.name in ["script", "style", "head", "title", "meta", "[document]"]:
                     continue
