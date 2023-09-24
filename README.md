@@ -5,7 +5,11 @@ Very preliminary, improvements are welcome.
 
 Sample (chat history cleared before the third image):
 
-![](figs/sample1-1.png) ![](figs/sample1-2.png) ![](figs/sample2.png)
+<p float="left">
+  <img src="figs/sample1-1.png" width="33%" />
+  <img src="figs/sample1-2.png" width="33%" />
+  <img src="figs/sample2.png" width="33%" />
+</p>
 
 Also a rough video in Chinese [here](https://www.bilibili.com/video/BV1Zj411b7rE).
 
