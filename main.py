@@ -1,23 +1,27 @@
-import copy
-import yaml
-import utils
-from flask import Flask, render_template, request
-import atexit
-import logging
-import os
-import math
-import re
-import threading
-import readline
-from datetime import datetime
-import pickle
-import sys
-import select
-import time
-import numpy as np
-import openai
-import zhipuai
 from typing import Tuple, List
+import numpy as np
+import time
+import sys
+import pickle
+from datetime import datetime
+import readline
+import threading
+import re
+import math
+import os
+import atexit
+from flask import Flask, render_template, request
+import utils
+import yaml
+import copy
+import logging
+import language_models
+from language_models import LanguageModel
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 
 cfg_name = sys.argv[1]
 host = sys.argv[2]
@@ -26,98 +30,9 @@ config = yaml.load(
     open(f'configs/{sys.argv[1]}.yaml', 'r'), Loader=yaml.FullLoader)
 os.makedirs(f'data/bots/{cfg_name}', exist_ok=True)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(f'data/bots/{cfg_name}/log.log')
-handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
 
 def cos_sim(a, b):
     return np.dot(a, b) / np.linalg.norm(a) / np.linalg.norm(b)
-
-
-class LanguageModelOpenAI:
-    def __init__(self, **kwargs):
-        openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
-        openai.api_key = os.environ["OPENAI_API_KEY"]
-
-    def generate(self, prompt):
-        while True:
-            try:
-                completion = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo", messages=[{"role": "user", "content": prompt}])
-                break
-            except openai.error.RateLimitError:
-                logger.warning(
-                    'rate limit exceeded during generation, will try again in 10s')
-                time.sleep(10)
-            except openai.error.APIError:
-                logger.warning('API error, will try again in 10s')
-                time.sleep(10)
-        return completion.choices[0].message.content
-
-    def encode(self, inp: str):
-        while True:
-            try:
-                embedding = openai.Embedding.create(
-                    input=inp, model="text-embedding-ada-002")['data'][0]['embedding']
-                break
-            except openai.error.RateLimitError:
-                logger.warning(
-                    'rate limit exceeded during encoding, will try again in 10s')
-                time.sleep(10)
-            except openai.error.APIError:
-                logger.warning('API error, will try again in 10s')
-                time.sleep(10)
-        return embedding
-
-
-class LanguageModelZhipu:
-    def __init__(self, **kwargs):
-        zhipuai.api_key = os.environ["ZHIPUAI_API_KEY"]
-
-    def generate(self, prompt):
-        while True:
-            try:
-                completion = zhipuai.model_api.invoke(
-                    model="chatglm_lite",
-                    prompt=[{"role":"user", "content": prompt}]
-                )
-                break
-            except Exception as e:
-                logger.error(str(e))
-                time.sleep(10)
-        return completion
-
-    def encode(self, inp: str):
-        while True:
-            try:
-                embedding = zhipuai.model_api.invoke(
-                    model="text_embedding",
-                    prompt=inp
-                )
-                break
-            except Exception as e:
-                logger.error(str(e))
-                time.sleep(10)
-        return embedding
-
-
-class LanguageModelDummy:
-    def __init__(self, **kwargs):
-        pass
-
-    def generate(self, prompt):
-        return "I don't know."
-
-    def encode(self, inp: str):
-        return np.random.rand(256)
-
-
-LanguageModel = LanguageModelOpenAI
 
 
 class Memory:
@@ -181,7 +96,7 @@ Rating (no explanation): """
             relevance = raw_relevance if raw_relevance > config['relevance_thresh'] else -math.inf
 
             scores.append(0.10 * recency + 0.85 *
-                            relevance + 0.05 * importance)
+                          relevance + 0.05 * importance)
             logger.debug(
                 f'\t{scores[-1]:.3f}({recency:.3f} {raw_relevance:.3f} {importance:.3f}) {text}')
         # sort scores with indices, filter by thresh
@@ -211,7 +126,8 @@ List at most 3 salient high-level questions we can answer from the above stateme
         related_mems = set()
         for line in ret:
             # retrieve related memories
-            mem = self.retrieve(time.time(), line, self.config['max_retrieve_num'], self.config['relevance_thresh'])
+            mem = self.retrieve(time.time(
+            ), line, self.config['max_retrieve_num'], self.config['relevance_thresh'])
             related_mems.update(mem)
         related_mems_str = ""
         for ts, content in related_mems:
@@ -231,7 +147,6 @@ List at most 3 high-level insights that you can infer from the above statements,
         # add these info into memory
         for line in ret:
             self.add(time.time(), line)
-
 
     def save(self, path: str):
         with open(path, 'wb') as f:
@@ -315,7 +230,7 @@ Chat history:
 
             prompt += f"""\
 {search_prompt_str}\n
-"""     
+"""
             prompt += f"""\
 How would {self.config['name']} respond (in markdown)?
 {self.config['name']}: """
@@ -370,7 +285,7 @@ Summarize important information from the chat above into STAND-ALONE pieces in t
             self.memory.reflect()
 
 
-language_model = LanguageModel()
+language_model = language_models.create('zhipu')
 memory = Memory(
     f'data/bots/{cfg_name}/memory.pkl', language_model, config)
 bot = ChatBot(memory, language_model, config)
@@ -393,6 +308,7 @@ def get_bot_response():
     output = bot.think(userText)
 
     return output
+
 
 @app.route("/reflect")
 def reflect():
