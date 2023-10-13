@@ -256,6 +256,10 @@ How would {self.config['name']} respond (in markdown)?
             self.current_chat.append(('me', ret))
             self.chat_history.append((time.time(), 'me', ret))
 
+            # if the chat is long enough, summarize it
+            if sum([len(line) for _, line in self.current_chat]) > self.config['chat_summary_length']:
+                self.summarize()
+
             # create an alarm that will fire in chat_summary_interval seconds
             self._reflect_timer = threading.Timer(
                 self.config['chat_summary_interval'], self.summarize)
