@@ -285,7 +285,7 @@ Summarize important information from the chat above into STAND-ALONE pieces in t
             self.memory.reflect()
 
 
-language_model = language_models.create('zhipu')
+language_model = language_models.create('openai')
 memory = Memory(
     f'data/bots/{cfg_name}/memory.pkl', language_model, config)
 bot = ChatBot(memory, language_model, config)

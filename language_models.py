@@ -27,7 +27,7 @@ class LanguageModelOpenAI(LanguageModel):
         while True:
             try:
                 completion = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo", messages=[{"role": "user", "content": prompt}])
+                    model="gpt-4", messages=[{"role": "user", "content": prompt}])
                 break
             except openai.error.RateLimitError:
                 logger.warning(
