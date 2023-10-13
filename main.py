@@ -179,7 +179,7 @@ class ChatBot:
             self._reflect_timer and self._reflect_timer.cancel()
 
             self.current_chat.append(('user', inp))
-            self.chat_history.append(('user', inp))
+            self.chat_history.append((time.time(), 'user', inp))
 
             chat_history_str = ''
             for role, text in self.current_chat:
@@ -254,7 +254,7 @@ How would {self.config['name']} respond (in markdown)?
             logger.debug(f'response: {ret}')
 
             self.current_chat.append(('me', ret))
-            self.chat_history.append(('me', ret))
+            self.chat_history.append((time.time(), 'me', ret))
 
             # create an alarm that will fire in chat_summary_interval seconds
             self._reflect_timer = threading.Timer(
@@ -320,7 +320,7 @@ def home():
 
 @app.route("/chat_history")
 def get_chat_history():
-    return {'chat_history': bot.chat_history}
+    return {'chat_history': bot.chat_history[-100:]}
 
 
 @app.route("/get")

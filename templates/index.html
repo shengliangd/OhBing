@@ -22,13 +22,21 @@
         <main class="msger-chat">
         </main>
         <form class="msger-inputarea">
-            <input type="text" class="msger-input" id="textInput" placeholder="Enter your message...">
-            <button type="submit" class="msger-send-btn">Send</button>
+            <textarea class="msger-input" id="textInput" placeholder="Enter your message..."></textarea>
+            <button type="submit" id="submitButton" class="msger-send-btn">Send</button>
         </form>
     </section>
     <!-- partial -->
     <script src='https://use.fontawesome.com/releases/v5.0.13/js/all.js'></script>
     <script src="https://unpkg.com/showdown/dist/showdown.min.js"></script>
+    <script>
+        document.getElementById('textInput').addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                document.getElementById('submitButton').click();
+            }
+        });
+    </script>
     <script>
         const msgerForm = get(".msger-inputarea");
         const msgerInput = get(".msger-input");
@@ -40,19 +48,20 @@
             event.preventDefault();
             const msgText = msgerInput.value;
             if (!msgText) return;
-            appendMessage(PERSON_NAME, "LightSkyBlue", "right", msgText);
+            appendMessage(new Date().getTime() / 1000, PERSON_NAME, "LightSkyBlue", "right", msgText);
             msgerInput.value = "";
             botResponse(msgText);
         });
         var converter = new showdown.Converter();
-        function appendMessage(name, color, side, text) {
-            //   Simple solution for small apps
+        function appendMessage(time, name, color, side, text) {
+            // time: from python time.time()
+            // Simple solution for small apps
             const msgHTML = `
 <div class="msg ${side}-msg">
   <div class="msg-img" style="background-color: ${color}"></div>
   <div class="msg-bubble">
     <div class="msg-info">
-      <div class="msg-info-time">${formatDate(new Date())}</div>
+      <div class="msg-info-time">${formatDate(new Date(time * 1000))}</div>
     </div>
     <div class="msg-text">
         <style>
@@ -78,7 +87,7 @@
                 console.log(rawText);
                 console.log(data);
                 const msgText = data;
-                appendMessage(BOT_NAME, "DarkSeaGreen", "left", msgText);
+                appendMessage(new Date().getTime() / 1000, BOT_NAME, "DarkSeaGreen", "left", msgText);
             });
         }
         // Utils
@@ -94,12 +103,13 @@
         $.get("/chat_history", function (data) {
             console.log(data);
             for (var i = 0; i < data['chat_history'].length; i++) {
-                var role = data['chat_history'][i][0];
-                var text = data['chat_history'][i][1];
+                const time = data['chat_history'][i][0];
+                const role = data['chat_history'][i][1];
+                const text = data['chat_history'][i][2];
                 if (role == 'me') {
-                    appendMessage(BOT_NAME, "DarkSeaGreen", "left", text);
+                    appendMessage(time, BOT_NAME, "DarkSeaGreen", "left", text);
                 } else {
-                    appendMessage(PERSON_NAME, "LightSkyBlue", "right", text);
+                    appendMessage(time, PERSON_NAME, "LightSkyBlue", "right", text);
                 }
             }
         });
