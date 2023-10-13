@@ -54,6 +54,7 @@ def search(query: str, max_num=3):
             except:
                 pass
     except Exception as e:
+        browser.get("about:blank")
         raise RuntimeError("api error")
 
     # read the first 1 in detail
@@ -82,6 +83,7 @@ def search(query: str, max_num=3):
         except TimeoutError:
             pass
 
+    browser.get("about:blank")
     return results[:max_num]
 
 

@@ -176,11 +176,11 @@ class ChatBot:
         with self.lock:
             self._reflect_timer and self._reflect_timer.cancel()
 
-            self.current_chat.append(('user', inp))
+            self.current_chat.append((time.time(), 'user', inp))
             self.chat_history.append((time.time(), 'user', inp))
 
             chat_history_str = ''
-            for role, text in self.current_chat:
+            for _, role, text in self.current_chat:
                 if role == 'me':
                     role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
@@ -201,7 +201,7 @@ It is {datetime.now().strftime('%Y/%m/%d %H:%M')} now.
 {self.config['name']} is having a chat:
 {chat_history_str}
 
-Q: What should we search on Internet to help {self.config['name']}? Answer with at most 5 keywords in user's language, or put "null" if not applicable.
+Q: What should we search on Internet to help {self.config['name']}? Answer with at most 5 keywords in user's language, or put null if not necessary.
 A: """
 
             logger.debug(f'getting search string with prompt: \n{prompt}')
@@ -251,11 +251,11 @@ How would {self.config['name']} respond (in markdown)?
                 prompt), f'{self.config["name"]}: ')
             logger.debug(f'response: {ret}')
 
-            self.current_chat.append(('me', ret))
+            self.current_chat.append((time.time(), 'me', ret))
             self.chat_history.append((time.time(), 'me', ret))
 
             # if the chat is long enough, summarize it
-            if sum([len(line) for _, line in self.current_chat]) > self.config['chat_summary_length']:
+            if sum([len(line) for _, _, line in self.current_chat]) > self.config['chat_summary_length']:
                 self.summarize()
 
             # create an alarm that will fire in chat_summary_interval seconds
@@ -271,7 +271,7 @@ How would {self.config['name']} respond (in markdown)?
                 return
 
             chat_history_str = ''
-            for role, text in self.current_chat:
+            for _, role, text in self.current_chat:
                 if role == 'me':
                     role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
