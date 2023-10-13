@@ -18,9 +18,7 @@ import logging
 import language_models
 from language_models import LanguageModel
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = utils.get_logger(__name__)
 
 
 cfg_name = sys.argv[1]

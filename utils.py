@@ -6,6 +6,7 @@ from bs4.element import Comment
 from bs4 import BeautifulSoup
 from urllib.parse import quote
 import readline
+import logging
 
 
 def remove_prefix(text, prefix):
@@ -14,10 +15,24 @@ def remove_prefix(text, prefix):
     return text
 
 
+log_handler = logging.FileHandler("data/log.log")
+log_handler.setLevel(logging.DEBUG)
+log_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(message)s'))
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(log_handler)
+    return logger
+
+
 options = FirefoxOptions()
 options.add_argument("--headless")
 options.binary = "/usr/bin/firefox-esr"
-options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0")
+options.set_preference("general.useragent.override",
+                       "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0")
 browser = webdriver.Firefox(options)
 browser.set_page_load_timeout(10)
 
@@ -61,7 +76,8 @@ def search(query: str, max_num=3):
                     continue
                 texts.append(text)
                 total_len += len(text)
-            results[0] = (results[0][0], "\n".join((results[0][1], *texts)), results[0][2])
+            results[0] = (results[0][0], "\n".join(
+                (results[0][1], *texts)), results[0][2])
         # selenium timeout
         except TimeoutError:
             pass

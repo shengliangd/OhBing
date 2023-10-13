@@ -3,10 +3,10 @@ import openai
 import zhipuai
 import time
 import os
+import sys
+import utils
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = utils.get_logger(__name__)
 
 
 class LanguageModel:
