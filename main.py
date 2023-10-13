@@ -322,7 +322,7 @@ def home():
 
 @app.route("/chat_history")
 def get_chat_history():
-    return {'chat_history': bot.chat_history[-100:]}
+    return {'chat_history': bot.current_chat}
 
 
 @app.route("/get")
