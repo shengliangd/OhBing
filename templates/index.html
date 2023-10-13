@@ -90,6 +90,19 @@
             const m = "0" + date.getMinutes();
             return `${h.slice(-2)}:${m.slice(-2)}`;
         }
+        // get chat_history, which is a json {'chat_history': [[role, text], [role, text], ...]]}
+        $.get("/chat_history", function (data) {
+            console.log(data);
+            for (var i = 0; i < data['chat_history'].length; i++) {
+                var role = data['chat_history'][i][0];
+                var text = data['chat_history'][i][1];
+                if (role == 'me') {
+                    appendMessage(BOT_NAME, "DarkSeaGreen", "left", text);
+                } else {
+                    appendMessage(PERSON_NAME, "LightSkyBlue", "right", text);
+                }
+            }
+        });
     </script>
 </body>
 

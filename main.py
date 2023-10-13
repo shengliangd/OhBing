@@ -39,6 +39,7 @@ class Memory:
     def __init__(self, path: str, lm: LanguageModel, config):
         self.config = config
         self.lm = lm
+        self.path = path
         # try to load memory from path
         try:
             with open(path, 'rb') as f:
@@ -148,15 +149,25 @@ List at most 3 high-level insights that you can infer from the above statements,
         for line in ret:
             self.add(time.time(), line)
 
-    def save(self, path: str):
-        with open(path, 'wb') as f:
+    def save(self):
+        with open(self.path, 'wb') as f:
             pickle.dump(self.memory, f)
 
 
 class ChatBot:
-    def __init__(self, memory: Memory, lm: LanguageModel, config):
-        self.chat_history: List[Tuple[str, str]] = []
-        self.memory = memory
+    def __init__(self, path: str, lm: LanguageModel, config):
+        self.path = path
+
+        try:
+            with open(f'{path}/history.pkl', 'rb') as f:
+                self.chat_history = pickle.load(f)
+        except FileNotFoundError:
+            self.chat_history = []
+
+        self.current_chat = []
+
+        self.memory = Memory(
+            f'{path}/memory.pkl', lm, config)
         self.lm = lm
         self.config = config
 
@@ -167,10 +178,11 @@ class ChatBot:
         with self.lock:
             self._reflect_timer and self._reflect_timer.cancel()
 
+            self.current_chat.append(('user', inp))
             self.chat_history.append(('user', inp))
 
             chat_history_str = ''
-            for role, text in self.chat_history:
+            for role, text in self.current_chat:
                 if role == 'me':
                     role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
@@ -241,6 +253,7 @@ How would {self.config['name']} respond (in markdown)?
                 prompt), f'{self.config["name"]}: ')
             logger.debug(f'response: {ret}')
 
+            self.current_chat.append(('me', ret))
             self.chat_history.append(('me', ret))
 
             # create an alarm that will fire in chat_summary_interval seconds
@@ -252,11 +265,11 @@ How would {self.config['name']} respond (in markdown)?
 
     def summarize(self):
         with self.lock:
-            if len(self.chat_history) == 0:
+            if len(self.current_chat) == 0:
                 return
 
             chat_history_str = ''
-            for role, text in self.chat_history:
+            for role, text in self.current_chat:
                 if role == 'me':
                     role = self.config['name']
                 chat_history_str += f'{role}: {text}\n'
@@ -278,20 +291,23 @@ Summarize important information from the chat above into STAND-ALONE pieces in t
             for line in ret:
                 self.memory.add(time.time(), line)
 
-            self.chat_history.clear()
+            self.current_chat.clear()
 
     def reflect(self):
         with self.lock:
             self.memory.reflect()
 
+    def save(self):
+        with open(f'{self.path}/history.pkl', 'wb') as f:
+            pickle.dump(self.chat_history, f)
+        self.memory.save()
+
 
 language_model = language_models.create('openai')
-memory = Memory(
-    f'data/bots/{cfg_name}/memory.pkl', language_model, config)
-bot = ChatBot(memory, language_model, config)
+bot = ChatBot(f'data/bots/{cfg_name}', language_model, config)
 
 # save memory on exit
-atexit.register(memory.save, f'data/bots/{cfg_name}/memory.pkl')
+atexit.register(bot.save)
 
 app = Flask(__name__)
 app.static_folder = 'static'
@@ -300,6 +316,11 @@ app.static_folder = 'static'
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/chat_history")
+def get_chat_history():
+    return {'chat_history': bot.chat_history}
 
 
 @app.route("/get")
@@ -319,7 +340,7 @@ def reflect():
 @app.route("/memory")
 def render_memory():
     mem = [(datetime.fromtimestamp(m[0]).strftime("%Y/%m/%d %H:%M"),
-            m[1], m[2], m[3]) for m in memory.memory]
+            m[1], m[2], m[3]) for m in bot.memory.memory]
     return render_template("memory.html", memory=mem)
 
 
